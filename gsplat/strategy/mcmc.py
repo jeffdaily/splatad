@@ -108,6 +108,7 @@ class MCMCStrategy(Strategy):
         step: int,
         info: Dict[str, Any],
         lr: float,
+        optimizers_prefix: str = "",
     ):
         """Callback function to be executed after the `loss.backward()` call.
 
@@ -125,12 +126,14 @@ class MCMCStrategy(Strategy):
             and step % self.refine_every == 0
         ):
             # teleport GSs
-            n_relocated_gs = self._relocate_gs(params, optimizers, binoms)
+            n_relocated_gs = self._relocate_gs(
+                params, optimizers, binoms, optimizers_prefix
+            )
             if self.verbose:
                 print(f"Step {step}: Relocated {n_relocated_gs} GSs.")
 
             # add new GSs
-            n_new_gs = self._add_new_gs(params, optimizers, binoms)
+            n_new_gs = self._add_new_gs(params, optimizers, binoms, optimizers_prefix)
             if self.verbose:
                 print(
                     f"Step {step}: Added {n_new_gs} GSs. "
@@ -150,6 +153,7 @@ class MCMCStrategy(Strategy):
         params: Union[Dict[str, torch.nn.Parameter], torch.nn.ParameterDict],
         optimizers: Dict[str, torch.optim.Optimizer],
         binoms: Tensor,
+        optimizers_prefix: str = "",
     ) -> int:
         opacities = torch.sigmoid(params["opacities"].flatten())
         dead_mask = opacities <= self.min_opacity
@@ -162,6 +166,7 @@ class MCMCStrategy(Strategy):
                 mask=dead_mask,
                 binoms=binoms,
                 min_opacity=self.min_opacity,
+                optimizers_prefix=optimizers_prefix,
             )
         return n_gs
 
@@ -171,6 +176,7 @@ class MCMCStrategy(Strategy):
         params: Union[Dict[str, torch.nn.Parameter], torch.nn.ParameterDict],
         optimizers: Dict[str, torch.optim.Optimizer],
         binoms: Tensor,
+        optimizers_prefix: str = "",
     ) -> int:
         current_n_points = len(params["means"])
         n_target = min(self.cap_max, int(1.05 * current_n_points))
@@ -183,5 +189,6 @@ class MCMCStrategy(Strategy):
                 n=n_gs,
                 binoms=binoms,
                 min_opacity=self.min_opacity,
+                optimizers_prefix=optimizers_prefix,
             )
         return n_gs

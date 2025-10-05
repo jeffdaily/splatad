@@ -51,6 +51,7 @@ def _update_param_with_optimizer(
     params: Union[Dict[str, torch.nn.Parameter], torch.nn.ParameterDict],
     optimizers: Dict[str, torch.optim.Optimizer],
     names: Union[List[str], None] = None,
+    optimizers_prefix: str = "",
 ):
     """Update the parameters and the state in the optimizers with defined functions.
 
@@ -68,11 +69,13 @@ def _update_param_with_optimizer(
         names = list(params.keys())
 
     # Split the names into optimized and un-optimized
-    un_optimized_names = set(names) - set(optimizers.keys())
-    optimized_names = set(names) - un_optimized_names
+    optimizers_names = [optimizers_prefix + name for name in names]
+    un_optimized_names = set(optimizers_names) - set(optimizers.keys())
+    optimized_names = set(optimizers_names) - un_optimized_names
 
     for name in optimized_names:
         optimizer = optimizers[name]
+        param_name = name.replace(optimizers_prefix, "")
         for i, param_group in enumerate(optimizer.param_groups):
             p = param_group["params"][0]
             p_state = optimizer.state[p]
@@ -81,13 +84,14 @@ def _update_param_with_optimizer(
                 if key != "step":
                     v = p_state[key]
                     p_state[key] = optimizer_fn(key, v)
-            p_new = param_fn(name, p)
+            p_new = param_fn(param_name, p)
             optimizer.param_groups[i]["params"] = [p_new]
             optimizer.state[p_new] = p_state
-            params[name] = p_new
+            params[param_name] = p_new
 
     for name in un_optimized_names:
-        params[name] = param_fn(name, params[name])
+        param_name = name.replace(optimizers_prefix, "")
+        params[param_name] = param_fn(param_name, params[param_name])
 
 
 @torch.no_grad()
@@ -250,6 +254,7 @@ def relocate(
     mask: Tensor,
     binoms: Tensor,
     min_opacity: float = 0.005,
+    optimizers_prefix: str = "",
 ):
     """Inplace relocate some dead Gaussians to the lives ones.
 
@@ -291,7 +296,9 @@ def relocate(
         return v
 
     # update the parameters and the state in the optimizers
-    _update_param_with_optimizer(param_fn, optimizer_fn, params, optimizers)
+    _update_param_with_optimizer(
+        param_fn, optimizer_fn, params, optimizers, optimizers_prefix=optimizers_prefix
+    )
     # update the extra running state
     for k, v in state.items():
         if isinstance(v, torch.Tensor):
@@ -306,6 +313,7 @@ def sample_add(
     n: int,
     binoms: Tensor,
     min_opacity: float = 0.005,
+    optimizers_prefix: str = "",
 ):
     opacities = torch.sigmoid(params["opacities"])
 
@@ -333,7 +341,9 @@ def sample_add(
         return torch.cat([v, v_new])
 
     # update the parameters and the state in the optimizers
-    _update_param_with_optimizer(param_fn, optimizer_fn, params, optimizers)
+    _update_param_with_optimizer(
+        param_fn, optimizer_fn, params, optimizers, optimizers_prefix=optimizers_prefix
+    )
     # update the extra running state
     for k, v in state.items():
         v_new = torch.zeros((len(sampled_idxs), *v.shape[1:]), device=v.device)
