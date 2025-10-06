@@ -284,12 +284,13 @@ def relocate(
     new_opacities = torch.clamp(new_opacities, max=1.0 - eps, min=min_opacity)
 
     def param_fn(name: str, p: Tensor) -> Tensor:
+        requires_grad = p.requires_grad
         if name == "opacities":
             p[sampled_idxs] = torch.logit(new_opacities)
         elif name == "scales":
             p[sampled_idxs] = torch.log(new_scales)
         p[dead_indices] = p[sampled_idxs]
-        return torch.nn.Parameter(p)
+        return torch.nn.Parameter(p, requires_grad=requires_grad)
 
     def optimizer_fn(key: str, v: Tensor) -> Tensor:
         v[sampled_idxs] = 0
@@ -329,12 +330,13 @@ def sample_add(
     new_opacities = torch.clamp(new_opacities, max=1.0 - eps, min=min_opacity)
 
     def param_fn(name: str, p: Tensor) -> Tensor:
+        requires_grad = p.requires_grad
         if name == "opacities":
             p[sampled_idxs] = torch.logit(new_opacities)
         elif name == "scales":
             p[sampled_idxs] = torch.log(new_scales)
         p = torch.cat([p, p[sampled_idxs]])
-        return torch.nn.Parameter(p)
+        return torch.nn.Parameter(p, requires_grad=requires_grad)
 
     def optimizer_fn(key: str, v: Tensor) -> Tensor:
         v_new = torch.zeros((len(sampled_idxs), *v.shape[1:]), device=v.device)
